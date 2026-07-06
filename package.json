@@ -13,12 +13,14 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
+    "js-yaml": "^4.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.11",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",

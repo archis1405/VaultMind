@@ -1,12 +1,16 @@
 import { useVaultStore } from "./store/vaultStore";
+import { VaultPicker } from "./components/VaultPicker";
+import { NoteList } from "./components/NoteList";
+import { NotePreview } from "./components/NotePreview";
 
 /**
- * App shell only — no logic yet. This is the placeholder UI for Step 1.
- * The three-pane layout (vault/sources sidebar, chat center, sources/citations)
- * will be fleshed out as later steps land.
+ * App shell. Step 2 wires up the left pane (vault picker + note list) and the
+ * center pane (note preview to verify ingestion). Retrieval/chat land later.
  */
 export default function App() {
   const status = useVaultStore((s) => s.status);
+  const noteCount = useVaultStore((s) => s.notes.length);
+  const vaultName = useVaultStore((s) => s.vaultName);
 
   return (
     <div className="flex h-full flex-col bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
@@ -17,35 +21,25 @@ export default function App() {
             client-side · zero backend
           </span>
         </div>
-        <span className="text-xs text-neutral-500">status: {status}</span>
+        <span className="text-xs text-neutral-500">
+          {vaultName ? `${vaultName} · ${noteCount} notes` : `status: ${status}`}
+        </span>
       </header>
 
       <main className="flex min-h-0 flex-1">
-        {/* Left: vault / sources (Step 2+) */}
-        <aside className="hidden w-64 shrink-0 border-r border-neutral-200 p-4 md:block dark:border-neutral-800">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-            Sources
-          </h2>
-          <p className="text-sm text-neutral-400">
-            No vault loaded yet.
-          </p>
+        {/* Left: vault picker + note list */}
+        <aside className="flex w-72 shrink-0 flex-col border-r border-neutral-200 dark:border-neutral-800">
+          <div className="border-b border-neutral-200 p-4 dark:border-neutral-800">
+            <VaultPicker />
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto p-4">
+            <NoteList />
+          </div>
         </aside>
 
-        {/* Center: chat / search (Step 7+) */}
-        <section className="flex min-w-0 flex-1 items-center justify-center p-6">
-          <div className="max-w-md text-center">
-            <h1 className="mb-2 text-2xl font-semibold">
-              Semantic search over your vault
-            </h1>
-            <p className="text-sm text-neutral-500">
-              Everything — embedding, storage, and retrieval — runs locally in
-              your browser. Nothing leaves your machine except the questions you
-              choose to send to your own LLM key.
-            </p>
-            <p className="mt-6 text-xs text-neutral-400">
-              Scaffold ready. Feature steps land incrementally.
-            </p>
-          </div>
+        {/* Center: note preview (verifies ingestion for now) */}
+        <section className="flex min-w-0 flex-1 items-start justify-center overflow-auto p-6">
+          <NotePreview />
         </section>
       </main>
     </div>
