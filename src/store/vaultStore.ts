@@ -5,39 +5,50 @@ import {
   VaultPickCancelled,
 } from "../lib/vault/ingest";
 import type { IngestProgress, VaultNote } from "../lib/vault/types";
+import { chunkMarkdown } from "../lib/chunking/chunk";
+import { Embedder, type EmbedderInfo } from "../lib/embedding/embedder";
+import type { EmbeddedChunk } from "../lib/embedding/types";
 
-/**
- * Top-level app status. As of Step 2 only `idle`/`ingesting`/`ready`/`error`
- * are reachable; `indexing` lands with the embedding pipeline (Step 4+).
- */
 export type AppStatus = "idle" | "ingesting" | "indexing" | "ready" | "error";
+
+/** Live progress of the index build (model load, then embedding). */
+export interface IndexProgress {
+  phase: "loading-model" | "embedding";
+  /** Chunks embedded so far (phase "embedding"). */
+  embedded: number;
+  /** Total chunks to embed. */
+  total: number;
+  /** Model download %, 0–100 (phase "loading-model"). */
+  modelPercent?: number;
+  /** File currently downloading. */
+  modelFile?: string;
+}
 
 interface VaultState {
   status: AppStatus;
   setStatus: (status: AppStatus) => void;
 
-  /** Human-readable name of the chosen vault directory. */
   vaultName?: string;
-  /** All parsed notes, sorted by path. */
   notes: VaultNote[];
-  /** Live ingest progress, present while status === "ingesting". */
   progress?: IngestProgress;
-  /** Last error message, if the previous action failed. */
   error?: string;
-  /** Path of the note currently selected for preview in the UI. */
   selectedNotePath?: string;
 
-  /** Open the picker and ingest the chosen vault into state. */
+  // --- indexing (Step 4) ---
+  embeddedChunks: EmbeddedChunk[];
+  embedderInfo?: EmbedderInfo;
+  indexProgress?: IndexProgress;
+
   loadVault: () => Promise<void>;
-  /** Select a note for preview (or clear with undefined). */
+  buildIndex: () => Promise<void>;
   selectNote: (path?: string) => void;
-  /** Clear the loaded vault, back to a fresh idle state. */
   resetVault: () => void;
 }
 
-export const useVaultStore = create<VaultState>((set) => ({
+export const useVaultStore = create<VaultState>((set, get) => ({
   status: "idle",
   notes: [],
+  embeddedChunks: [],
 
   setStatus: (status) => set({ status }),
   selectNote: (path) => set({ selectedNotePath: path }),
@@ -47,7 +58,6 @@ export const useVaultStore = create<VaultState>((set) => ({
     try {
       dir = await pickVaultDirectory();
     } catch (err) {
-      // User dismissed the picker — leave existing state untouched.
       if (err instanceof VaultPickCancelled) return;
       set({ status: "error", error: (err as Error).message });
       return;
@@ -57,6 +67,8 @@ export const useVaultStore = create<VaultState>((set) => ({
       status: "ingesting",
       vaultName: dir.name,
       notes: [],
+      embeddedChunks: [], // a new vault invalidates any previous index
+      embedderInfo: undefined,
       error: undefined,
       selectedNotePath: undefined,
       progress: { filesFound: 0, filesRead: 0 },
@@ -70,12 +82,76 @@ export const useVaultStore = create<VaultState>((set) => ({
     }
   },
 
+  buildIndex: async () => {
+    const { notes } = get();
+    if (notes.length === 0) return;
+
+    set({
+      status: "indexing",
+      error: undefined,
+      embeddedChunks: [],
+      indexProgress: { phase: "loading-model", embedded: 0, total: 0 },
+    });
+
+    const embedder = new Embedder();
+    try {
+      // 1. Load the model (streams download progress).
+      const info = await embedder.init((p) =>
+        set({
+          indexProgress: {
+            phase: "loading-model",
+            embedded: 0,
+            total: 0,
+            modelPercent: p.progress,
+            modelFile: p.file,
+          },
+        }),
+      );
+
+      // 2. Chunk every note, keeping the note path + position with each chunk.
+      const pending: Omit<EmbeddedChunk, "embedding">[] = [];
+      for (const note of notes) {
+        chunkMarkdown(note.body).forEach((chunk, chunkIndex) =>
+          pending.push({ ...chunk, notePath: note.path, chunkIndex }),
+        );
+      }
+
+      set({ indexProgress: { phase: "embedding", embedded: 0, total: pending.length } });
+
+      // 3. Embed all chunk texts, streaming progress.
+      const embeddings = await embedder.embed(
+        pending.map((c) => c.text),
+        (embedded, total) =>
+          set({ indexProgress: { phase: "embedding", embedded, total } }),
+      );
+
+      const embeddedChunks: EmbeddedChunk[] = pending.map((c, i) => ({
+        ...c,
+        embedding: embeddings[i],
+      }));
+
+      set({
+        status: "ready",
+        embeddedChunks,
+        embedderInfo: info,
+        indexProgress: undefined,
+      });
+    } catch (err) {
+      set({ status: "error", error: (err as Error).message, indexProgress: undefined });
+    } finally {
+      embedder.terminate();
+    }
+  },
+
   resetVault: () =>
     set({
       status: "idle",
       notes: [],
+      embeddedChunks: [],
+      embedderInfo: undefined,
       vaultName: undefined,
       progress: undefined,
+      indexProgress: undefined,
       error: undefined,
       selectedNotePath: undefined,
     }),

@@ -1,5 +1,6 @@
 import { useVaultStore } from "./store/vaultStore";
 import { VaultPicker } from "./components/VaultPicker";
+import { IndexPanel } from "./components/IndexPanel";
 import { NoteList } from "./components/NoteList";
 import { NotePreview } from "./components/NotePreview";
 
@@ -29,8 +30,9 @@ export default function App() {
       <main className="flex min-h-0 flex-1">
         {/* Left: vault picker + note list */}
         <aside className="flex w-72 shrink-0 flex-col border-r border-neutral-200 dark:border-neutral-800">
-          <div className="border-b border-neutral-200 p-4 dark:border-neutral-800">
+          <div className="space-y-3 border-b border-neutral-200 p-4 dark:border-neutral-800">
             <VaultPicker />
+            <IndexPanel />
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-4">
             <NoteList />
