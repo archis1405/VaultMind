@@ -22,6 +22,25 @@ export interface VaultNote {
   size: number;
 }
 
+/**
+ * A PDF discovered in the vault. We keep only the handle + metadata here (not the
+ * bytes) — a book can be huge, so it's read lazily at index time, and only if its
+ * size/mtime fingerprint changed.
+ */
+export interface PdfFile {
+  /** Vault-relative POSIX path, e.g. "Books/SICP.pdf". */
+  path: string;
+  handle: FileSystemFileHandle;
+  size: number;
+  lastModified: number;
+}
+
+/** Result of walking + reading a vault: markdown notes plus PDF file handles. */
+export interface VaultContents {
+  notes: VaultNote[];
+  pdfs: PdfFile[];
+}
+
 /** Progress reported while walking + reading the vault, for UI feedback. */
 export interface IngestProgress {
   /** Total .md files discovered so far during the directory walk. */

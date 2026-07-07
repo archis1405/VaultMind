@@ -174,6 +174,30 @@ function slidingWindow(
 }
 
 /**
+ * Chunk unstructured plain text (e.g. one PDF page) with the sliding-window
+ * strategy only — no heading detection, so a stray `#` in extracted PDF text is
+ * never misread as a heading. Returns chunks with an empty `headingPath`; the
+ * caller (PDF pipeline) attaches page/chapter metadata.
+ */
+export function chunkPlainText(text: string, options: ChunkOptions = {}): Chunk[] {
+  const targetTokens = options.targetTokens ?? DEFAULT_TARGET_TOKENS;
+  const overlapRatio = options.overlapRatio ?? DEFAULT_OVERLAP_RATIO;
+
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  const tokens = estimateTokens(trimmed);
+  if (tokens <= targetTokens) {
+    return [{ text: trimmed, tokenCount: tokens, headingPath: [] }];
+  }
+  return slidingWindow(trimmed, targetTokens, overlapRatio).map((w) => ({
+    text: w.text,
+    tokenCount: w.tokenCount,
+    headingPath: [],
+  }));
+}
+
+/**
  * Chunk a frontmatter-stripped markdown body into embeddable chunks.
  *
  * @param body   The note body (frontmatter already removed in Step 2).

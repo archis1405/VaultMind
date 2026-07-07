@@ -14,13 +14,33 @@ export interface Source {
   notePath: string;
   headingPath: string[];
   chunkIndex: number;
+  sourceType: "note" | "pdf";
+  /** 1-based page number for PDF sources. */
+  page?: number;
   /** The chunk text shown to the model / previewed in the UI. */
   text: string;
 }
 
-/** A short human label for a source, e.g. "notes.md › Overview". */
-export function sourceLabel(s: Pick<Source, "notePath" | "headingPath">): string {
-  const name = s.notePath.split("/").pop()?.replace(/\.md$/i, "") ?? s.notePath;
+type LabelFields = Pick<Source, "notePath" | "headingPath" | "sourceType" | "page">;
+
+/** Base file name without a markdown/pdf extension. */
+function baseName(path: string): string {
+  return path.split("/").pop()?.replace(/\.(md|markdown|pdf)$/i, "") ?? path;
+}
+
+/**
+ * A short human label for a source:
+ *   note → "notes › Overview"
+ *   book → "MyBook › Chapter 3, p.42"
+ */
+export function sourceLabel(s: LabelFields): string {
+  const name = baseName(s.notePath);
+  if (s.sourceType === "pdf") {
+    const chapter = s.headingPath[0];
+    const page = s.page !== undefined ? `p.${s.page}` : "";
+    const suffix = [chapter, page].filter(Boolean).join(", ");
+    return suffix ? `${name} › ${suffix}` : name;
+  }
   return s.headingPath.length > 0 ? `${name} › ${s.headingPath.join(" › ")}` : name;
 }
 
@@ -38,11 +58,14 @@ export function buildContext(results: HybridResult[]): {
     notePath: r.chunk.notePath,
     headingPath: r.chunk.headingPath,
     chunkIndex: r.chunk.chunkIndex,
+    sourceType: r.chunk.sourceType,
+    page: r.chunk.page,
     text: r.chunk.text,
   }));
 
+  // Label each source as a Note or Book so the model can cite pages for books.
   const contextBlock = sources
-    .map((s) => `[${s.n}] Source: ${sourceLabel(s)}\n${s.text}`)
+    .map((s) => `[${s.n}] ${s.sourceType === "pdf" ? "Book" : "Note"}: ${sourceLabel(s)}\n${s.text}`)
     .join("\n\n");
 
   return { sources, contextBlock };
@@ -53,6 +76,7 @@ const SYSTEM_PROMPT = `You are AskVault, a careful assistant answering questions
 Rules:
 - Answer using ONLY the information in the provided context sources.
 - Cite every claim inline with bracketed source numbers like [1] or [2][3].
+- Sources are labeled Note or Book; for a Book, mention the page in prose when useful (the label includes it).
 - If the context does not contain the answer, say so plainly — do not invent facts.
 - Be concise and direct.`;
 

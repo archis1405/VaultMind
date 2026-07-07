@@ -4,8 +4,10 @@ import {
   pickVaultDirectory,
   VaultPickCancelled,
 } from "../lib/vault/ingest";
-import type { IngestProgress, VaultNote } from "../lib/vault/types";
+import type { IngestProgress, PdfFile, VaultNote } from "../lib/vault/types";
 import { chunkMarkdown } from "../lib/chunking/chunk";
+import { chunkPdfPages } from "../lib/pdf/chunkPdf";
+import { PdfExtractor } from "../lib/pdf/pdfExtractor";
 import type { EmbedderInfo } from "../lib/embedding/embedder";
 import { getEmbedder, initEmbedder } from "../lib/embedding/embedderSingleton";
 import { EMBEDDING_MODEL } from "../lib/embedding/protocol";
@@ -35,19 +37,39 @@ import {
 export type AppStatus = "idle" | "ingesting" | "indexing" | "ready" | "error";
 
 export interface IndexProgress {
-  phase: "loading-model" | "embedding";
+  phase: "loading-model" | "extracting" | "embedding";
   embedded: number;
   total: number;
   modelPercent?: number;
   modelFile?: string;
+  /** PDF currently being extracted (phase "extracting"). */
+  extractingFile?: string;
+  extractPage?: number;
+  extractTotal?: number;
 }
 
 /** Summary of the last index build — the "incremental win" made visible. */
 export interface IndexSummary {
   notesEmbedded: number;
-  notesReused: number;
-  notesDeleted: number;
+  pdfsEmbedded: number;
+  reused: number;
+  deleted: number;
   chunksEmbedded: number;
+}
+
+/** A non-fatal problem surfaced during indexing (e.g. a scanned PDF). */
+export interface IndexWarning {
+  path: string;
+  message: string;
+}
+
+/** Minimal data to preview a retrieved chunk / cited source in the side panel. */
+export interface SourcePreviewData {
+  sourceType: "note" | "pdf";
+  notePath: string;
+  headingPath: string[];
+  page?: number;
+  text: string;
 }
 
 interface VaultState {
@@ -56,14 +78,18 @@ interface VaultState {
 
   vaultName?: string;
   notes: VaultNote[];
+  pdfs: PdfFile[];
   progress?: IngestProgress;
   error?: string;
   selectedNotePath?: string;
+  /** A retrieved chunk / cited source shown in the preview pane. */
+  previewSource?: SourcePreviewData;
 
   embeddedChunks: EmbeddedChunk[];
   embedderInfo?: EmbedderInfo;
   indexProgress?: IndexProgress;
   indexSummary?: IndexSummary;
+  indexWarnings: IndexWarning[];
   /** True when the current index was loaded from IndexedDB, not just built. */
   indexRestored: boolean;
 
@@ -84,6 +110,7 @@ interface VaultState {
   retrieve: (query: string, topK?: number) => Promise<HybridResult[]>;
   clearSearch: () => void;
   selectNote: (path?: string) => void;
+  previewChunk: (source?: SourcePreviewData) => void;
   resetVault: () => void;
 }
 
@@ -93,19 +120,25 @@ const storedToEmbedded = (c: StoredChunk): EmbeddedChunk => ({
   headingPath: c.headingPath,
   notePath: c.notePath,
   chunkIndex: c.chunkIndex,
+  sourceType: c.sourceType,
+  page: c.page,
   embedding: c.embedding,
 });
 
 export const useVaultStore = create<VaultState>((set, get) => ({
   status: "idle",
   notes: [],
+  pdfs: [],
   embeddedChunks: [],
+  indexWarnings: [],
   indexRestored: false,
   query: "",
   searching: false,
 
   setStatus: (status) => set({ status }),
-  selectNote: (path) => set({ selectedNotePath: path }),
+  // Selecting a full note clears any single-chunk source preview, and vice-versa.
+  selectNote: (path) => set({ selectedNotePath: path, previewSource: undefined }),
+  previewChunk: (source) => set({ previewSource: source, selectedNotePath: undefined }),
   setQuery: (query) => set({ query }),
   clearSearch: () => set({ query: "", searchResults: undefined }),
 
@@ -123,39 +156,44 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       status: "ingesting",
       vaultName: dir.name,
       notes: [],
+      pdfs: [],
       error: undefined,
       selectedNotePath: undefined,
       progress: { filesFound: 0, filesRead: 0 },
     });
 
     try {
-      const notes = await ingestVault(dir, (progress) => set({ progress }));
-      set({ status: "ready", notes, progress: undefined });
+      const { notes, pdfs } = await ingestVault(dir, (progress) => set({ progress }));
+      set({ status: "ready", notes, pdfs, progress: undefined });
     } catch (err) {
       set({ status: "error", error: (err as Error).message, progress: undefined });
     }
   },
 
   /**
-   * Incrementally (re)build the index:
-   *   1. Load the model.
-   *   2. If the model/dimension changed since last time, wipe the whole index.
-   *   3. Hash every note; diff against stored metadata to get an embed/delete plan.
-   *   4. Delete stale chunks, embed only new/changed notes, persist atomically.
+   * Incrementally (re)build the index over notes AND PDFs:
+   *   1. Load the model; wipe the index if the model/dimension changed.
+   *   2. Fingerprint every source — notes by content SHA-256, PDFs by
+   *      size+mtime (cheap; avoids re-reading huge books). Diff to a plan.
+   *   3. Delete stale chunks; chunk changed notes and extract+chunk changed PDFs
+   *      (page numbers + chapters preserved). Scanned PDFs are warned + skipped.
+   *   4. Embed all pending chunks (notes + books together) in one pass; persist.
    *   5. Reload all chunks from the DB into memory for retrieval.
    */
   buildIndex: async () => {
-    const { notes } = get();
-    if (notes.length === 0) return;
+    const { notes, pdfs } = get();
+    if (notes.length === 0 && pdfs.length === 0) return;
 
     set({
       status: "indexing",
       error: undefined,
       indexSummary: undefined,
+      indexWarnings: [],
       indexProgress: { phase: "loading-model", embedded: 0, total: 0 },
     });
 
     const db = await getDatabase();
+    const pdfExtractor = new PdfExtractor();
     try {
       const info = await initEmbedder((p) =>
         set({
@@ -175,26 +213,103 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         await clearIndex(db);
       }
 
-      // Hash every note, then plan the minimal set of work.
-      const hashed = await Promise.all(
-        notes.map(async (note) => ({ note, hash: await sha256Hex(note.raw) })),
+      // Fingerprint sources: notes by content hash, PDFs by size+mtime (cheap).
+      const noteByPath = new Map(
+        await Promise.all(
+          notes.map(async (note) => [note.path, { note, hash: await sha256Hex(note.raw) }] as const),
+        ),
       );
-      const byPath = new Map(hashed.map((h) => [h.note.path, h]));
-      const storedMeta = await getAllNoteMeta(db);
-      const plan = planIndex(
-        hashed.map((h) => ({ path: h.note.path, hash: h.hash })),
-        storedMeta,
+      const pdfByPath = new Map(
+        pdfs.map((pdf) => [pdf.path, { pdf, hash: `pdf:${pdf.size}:${pdf.lastModified}` }] as const),
       );
 
-      // Remove stale / deleted notes' chunks.
+      const current = [
+        ...[...noteByPath.values()].map((n) => ({ path: n.note.path, hash: n.hash })),
+        ...[...pdfByPath.values()].map((p) => ({ path: p.pdf.path, hash: p.hash })),
+      ];
+      const storedMeta = await getAllNoteMeta(db);
+      const plan = planIndex(current, storedMeta);
+
+      // Remove stale / deleted sources' chunks.
       for (const path of plan.toDelete) await deleteNote(db, path);
 
-      // Chunk every note that needs (re)embedding, flattening to a single list.
-      const pending: { notePath: string; chunkIndex: number; hash: string; note: VaultNote; chunk: ReturnType<typeof chunkMarkdown>[number] }[] = [];
-      for (const path of plan.toEmbed) {
-        const { note, hash } = byPath.get(path)!;
+      // A pending chunk carries everything needed to persist it after embedding.
+      interface PendingChunk {
+        sourcePath: string;
+        chunkIndex: number;
+        sourceType: "note" | "pdf";
+        page?: number;
+        text: string;
+        headingPath: string[];
+        tokenCount: number;
+        lastModified: number;
+      }
+      const pending: PendingChunk[] = [];
+      const warnings: IndexWarning[] = [];
+      // Per-source metadata to persist (chunk count filled in after grouping).
+      const metaByPath = new Map<string, { hash: string; lastModified: number }>();
+
+      const notePaths = plan.toEmbed.filter((p) => noteByPath.has(p));
+      const pdfPaths = plan.toEmbed.filter((p) => pdfByPath.has(p));
+
+      // Notes → chunk synchronously.
+      for (const path of notePaths) {
+        const { note, hash } = noteByPath.get(path)!;
+        metaByPath.set(path, { hash, lastModified: note.lastModified });
         chunkMarkdown(note.body).forEach((chunk, chunkIndex) =>
-          pending.push({ notePath: path, chunkIndex, hash, note, chunk }),
+          pending.push({
+            sourcePath: path,
+            chunkIndex,
+            sourceType: "note",
+            text: chunk.text,
+            headingPath: chunk.headingPath,
+            tokenCount: chunk.tokenCount,
+            lastModified: note.lastModified,
+          }),
+        );
+      }
+
+      // PDFs → extract in the worker (page by page), then chunk per page.
+      for (const path of pdfPaths) {
+        const { pdf, hash } = pdfByPath.get(path)!;
+        metaByPath.set(path, { hash, lastModified: pdf.lastModified });
+        set({ indexProgress: { phase: "extracting", embedded: 0, total: 0, extractingFile: path } });
+
+        const file = await pdf.handle.getFile();
+        const buffer = await file.arrayBuffer();
+        const { pages, extractability } = await pdfExtractor.extract(buffer, path, (page, total) =>
+          set({
+            indexProgress: {
+              phase: "extracting",
+              embedded: 0,
+              total: 0,
+              extractingFile: path,
+              extractPage: page,
+              extractTotal: total,
+            },
+          }),
+        );
+
+        if (extractability.scanned) {
+          // No OCR: warn, and still record meta so we don't retry every rebuild.
+          warnings.push({
+            path,
+            message: "No extractable text — looks scanned/image-only. Skipped (no OCR).",
+          });
+          continue;
+        }
+
+        chunkPdfPages(pages).forEach((chunk, chunkIndex) =>
+          pending.push({
+            sourcePath: path,
+            chunkIndex,
+            sourceType: "pdf",
+            page: chunk.page,
+            text: chunk.text,
+            headingPath: chunk.headingPath,
+            tokenCount: chunk.tokenCount,
+            lastModified: pdf.lastModified,
+          }),
         );
       }
 
@@ -203,36 +318,41 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       const embeddings =
         pending.length > 0
           ? await getEmbedder().embed(
-              pending.map((p) => p.chunk.text),
+              pending.map((p) => p.text),
               (embedded, total) => set({ indexProgress: { phase: "embedding", embedded, total } }),
             )
           : [];
 
-      // Assemble stored chunks and group them by note for atomic per-note writes.
-      const chunksByNote = new Map<string, StoredChunk[]>();
+      // Assemble stored chunks grouped by source path for atomic per-source writes.
+      const chunksBySource = new Map<string, StoredChunk[]>();
       pending.forEach((p, i) => {
         const stored: StoredChunk = {
-          id: chunkId(p.notePath, p.chunkIndex),
-          notePath: p.notePath,
+          id: chunkId(p.sourcePath, p.chunkIndex),
+          notePath: p.sourcePath,
           chunkIndex: p.chunkIndex,
-          text: p.chunk.text,
-          headingPath: p.chunk.headingPath,
-          tokenCount: p.chunk.tokenCount,
+          sourceType: p.sourceType,
+          page: p.page,
+          text: p.text,
+          headingPath: p.headingPath,
+          tokenCount: p.tokenCount,
           embedding: embeddings[i],
-          lastModified: p.note.lastModified,
+          lastModified: p.lastModified,
         };
-        const bucket = chunksByNote.get(p.notePath);
+        const bucket = chunksBySource.get(p.sourcePath);
         if (bucket) bucket.push(stored);
-        else chunksByNote.set(p.notePath, [stored]);
+        else chunksBySource.set(p.sourcePath, [stored]);
       });
 
+      // Persist every (re)indexed source — including scanned PDFs with 0 chunks,
+      // so their fingerprint is recorded and they aren't re-extracted next time.
       for (const path of plan.toEmbed) {
-        const { note, hash } = byPath.get(path)!;
-        const chunks = chunksByNote.get(path) ?? [];
+        const m = metaByPath.get(path);
+        if (!m) continue;
+        const chunks = chunksBySource.get(path) ?? [];
         const meta: NoteMeta = {
           path,
-          contentHash: hash,
-          lastModified: note.lastModified,
+          contentHash: m.hash,
+          lastModified: m.lastModified,
           chunkCount: chunks.length,
           indexedAt: Date.now(),
         };
@@ -252,18 +372,21 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         embedderInfo: info,
         indexRestored: false,
         indexProgress: undefined,
+        indexWarnings: warnings,
         _chunkIndex: undefined, // chunk set changed → invalidate cached retrieval index
         indexSummary: {
-          notesEmbedded: plan.toEmbed.length,
-          notesReused: plan.unchanged.length,
-          notesDeleted: plan.toDelete.length,
+          notesEmbedded: notePaths.length,
+          pdfsEmbedded: pdfPaths.length - warnings.length,
+          reused: plan.unchanged.length,
+          deleted: plan.toDelete.length,
           chunksEmbedded: pending.length,
         },
       });
     } catch (err) {
       set({ status: "error", error: (err as Error).message, indexProgress: undefined });
+    } finally {
+      pdfExtractor.terminate(); // one-shot per build; embedder singleton stays alive
     }
-    // The embedder is intentionally kept alive (singleton) for query embedding.
   },
 
   /**
@@ -325,15 +448,18 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     set({
       status: "idle",
       notes: [],
+      pdfs: [],
       embeddedChunks: [],
       embedderInfo: undefined,
       vaultName: undefined,
       progress: undefined,
       indexProgress: undefined,
       indexSummary: undefined,
+      indexWarnings: [],
       indexRestored: false,
       error: undefined,
       selectedNotePath: undefined,
+      previewSource: undefined,
       query: "",
       searchResults: undefined,
       _chunkIndex: undefined,

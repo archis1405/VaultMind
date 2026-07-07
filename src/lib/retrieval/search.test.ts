@@ -8,6 +8,7 @@ function chunk(notePath: string, chunkIndex: number, text: string, vec: number[]
   return {
     notePath,
     chunkIndex,
+    sourceType: "note",
     text,
     headingPath: [],
     tokenCount: text.split(/\s+/).length,

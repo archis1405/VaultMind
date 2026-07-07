@@ -24,6 +24,7 @@ function makeChunk(notePath: string, i: number): StoredChunk {
     id: chunkId(notePath, i),
     notePath,
     chunkIndex: i,
+    sourceType: "note",
     text: `chunk ${i} of ${notePath}`,
     headingPath: ["H", `sub-${i}`],
     tokenCount: 5,

@@ -34,7 +34,7 @@ function renderWithCitations(content: string, sources: Source[], onCite: (s: Sou
 }
 
 function Turn({ turn }: { turn: ChatTurn }) {
-  const selectNote = useVaultStore((s) => s.selectNote);
+  const previewChunk = useVaultStore((s) => s.previewChunk);
 
   if (turn.role === "user") {
     return (
@@ -51,7 +51,7 @@ function Turn({ turn }: { turn: ChatTurn }) {
     <div className="flex flex-col gap-2">
       <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-neutral-100 px-3 py-2 text-sm dark:bg-neutral-900">
         {turn.content
-          ? renderWithCitations(turn.content, sources, (s) => selectNote(s.notePath))
+          ? renderWithCitations(turn.content, sources, (s) => previewChunk(s))
           : turn.streaming && <span className="text-neutral-400">thinking…</span>}
         {turn.streaming && turn.content && <span className="ml-0.5 animate-pulse">▋</span>}
       </div>
@@ -66,11 +66,11 @@ function Turn({ turn }: { turn: ChatTurn }) {
               <button
                 key={s.n}
                 type="button"
-                onClick={() => selectNote(s.notePath)}
+                onClick={() => previewChunk(s)}
                 className="rounded border border-neutral-200 px-1.5 py-0.5 text-[11px] text-neutral-600 hover:bg-neutral-100 dark:border-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-900"
                 title={s.notePath}
               >
-                [{s.n}] {sourceLabel(s)}
+                {s.sourceType === "pdf" ? "📖" : "📄"} [{s.n}] {sourceLabel(s)}
               </button>
             ))}
           </div>

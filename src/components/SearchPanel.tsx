@@ -23,26 +23,25 @@ function RankBadge({ label, rank }: { label: string; rank?: number }) {
 }
 
 function ResultRow({ result }: { result: HybridResult }) {
-  const selectNote = useVaultStore((s) => s.selectNote);
-  const clearSearch = useVaultStore((s) => s.clearSearch);
+  const previewChunk = useVaultStore((s) => s.previewChunk);
   const { chunk } = result;
-  const noteName = chunk.notePath.split("/").pop()?.replace(/\.md$/i, "") ?? chunk.notePath;
+  const isPdf = chunk.sourceType === "pdf";
+  const name = chunk.notePath.split("/").pop()?.replace(/\.(md|pdf)$/i, "") ?? chunk.notePath;
+  const crumb = isPdf
+    ? [chunk.headingPath[0], chunk.page !== undefined ? `p.${chunk.page}` : ""].filter(Boolean).join(", ")
+    : chunk.headingPath.join(" › ");
 
   return (
     <button
       type="button"
-      onClick={() => {
-        selectNote(chunk.notePath);
-        clearSearch();
-      }}
+      onClick={() => previewChunk(chunk)}
       className="w-full rounded-lg border border-neutral-200 p-3 text-left transition hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:border-neutral-700 dark:hover:bg-neutral-900"
     >
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="truncate text-sm font-medium">
-          {noteName}
-          {chunk.headingPath.length > 0 && (
-            <span className="font-normal text-neutral-400"> › {chunk.headingPath.join(" › ")}</span>
-          )}
+          <span className="mr-1">{isPdf ? "📖" : "📄"}</span>
+          {name}
+          {crumb && <span className="font-normal text-neutral-400"> › {crumb}</span>}
         </span>
         <span className="shrink-0 text-[10px] text-neutral-400">
           rrf {result.score.toFixed(4)}

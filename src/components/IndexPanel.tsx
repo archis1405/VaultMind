@@ -21,21 +21,24 @@ function Bar({ fraction }: { fraction?: number }) {
 export function IndexPanel() {
   const status = useVaultStore((s) => s.status);
   const notes = useVaultStore((s) => s.notes);
+  const pdfs = useVaultStore((s) => s.pdfs);
   const progress = useVaultStore((s) => s.indexProgress);
   const summary = useVaultStore((s) => s.indexSummary);
+  const warnings = useVaultStore((s) => s.indexWarnings);
   const info = useVaultStore((s) => s.embedderInfo);
   const embeddedChunks = useVaultStore((s) => s.embeddedChunks);
   const indexRestored = useVaultStore((s) => s.indexRestored);
   const buildIndex = useVaultStore((s) => s.buildIndex);
 
+  const hasSources = notes.length > 0 || pdfs.length > 0;
   const hasIndex = embeddedChunks.length > 0;
-  if (notes.length === 0 && !hasIndex) return null;
+  if (!hasSources && !hasIndex) return null;
 
   const indexing = status === "indexing";
 
   return (
     <div className="space-y-2">
-      {notes.length > 0 && (
+      {hasSources && (
         <button
           type="button"
           onClick={() => void buildIndex()}
@@ -46,16 +49,36 @@ export function IndexPanel() {
         </button>
       )}
 
+      {pdfs.length > 0 && !indexing && (
+        <p className="text-[11px] text-neutral-400">
+          {notes.length} notes · {pdfs.length} PDF{pdfs.length === 1 ? "" : "s"}
+        </p>
+      )}
+
       {indexing && progress && (
         <div className="space-y-1">
-          {progress.phase === "loading-model" ? (
+          {progress.phase === "loading-model" && (
             <>
               <Bar fraction={progress.modelPercent ? progress.modelPercent / 100 : undefined} />
               <p className="truncate text-xs text-neutral-500">
                 Loading model{progress.modelFile ? ` · ${progress.modelFile}` : "…"}
               </p>
             </>
-          ) : (
+          )}
+          {progress.phase === "extracting" && (
+            <>
+              <Bar
+                fraction={
+                  progress.extractTotal ? (progress.extractPage ?? 0) / progress.extractTotal : undefined
+                }
+              />
+              <p className="truncate text-xs text-neutral-500">
+                Extracting {progress.extractingFile?.split("/").pop()}
+                {progress.extractTotal ? ` · page ${progress.extractPage}/${progress.extractTotal}` : "…"}
+              </p>
+            </>
+          )}
+          {progress.phase === "embedding" && (
             <>
               <Bar fraction={progress.total ? progress.embedded / progress.total : 1} />
               <p className="text-xs text-neutral-500">
@@ -70,7 +93,7 @@ export function IndexPanel() {
         <p className="text-xs text-neutral-500">
           {embeddedChunks.length} chunks ·{" "}
           <span className="font-medium uppercase">{info.backend}</span> · {info.dimension}-dim
-          {indexRestored && notes.length === 0 && (
+          {indexRestored && !hasSources && (
             <span className="block text-neutral-400">restored from disk — load the vault to update</span>
           )}
         </p>
@@ -78,10 +101,20 @@ export function IndexPanel() {
 
       {!indexing && summary && (
         <p className="text-xs text-neutral-500">
-          Embedded {summary.notesEmbedded} note{summary.notesEmbedded === 1 ? "" : "s"} (
-          {summary.chunksEmbedded} chunks) · reused {summary.notesReused} · removed{" "}
-          {summary.notesDeleted}
+          Embedded {summary.notesEmbedded} note{summary.notesEmbedded === 1 ? "" : "s"}
+          {summary.pdfsEmbedded > 0 && ` + ${summary.pdfsEmbedded} book${summary.pdfsEmbedded === 1 ? "" : "s"}`}{" "}
+          ({summary.chunksEmbedded} chunks) · reused {summary.reused} · removed {summary.deleted}
         </p>
+      )}
+
+      {!indexing && warnings.length > 0 && (
+        <div className="space-y-1 rounded-md border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          {warnings.map((w) => (
+            <p key={w.path}>
+              <span className="font-medium">{w.path.split("/").pop()}</span>: {w.message}
+            </p>
+          ))}
+        </div>
       )}
     </div>
   );

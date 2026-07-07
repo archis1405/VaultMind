@@ -6,10 +6,12 @@ import { IndexPanel } from "./components/IndexPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { NoteList } from "./components/NoteList";
 import { NotePreview } from "./components/NotePreview";
+import { SourcePreview } from "./components/SourcePreview";
 import { SearchPanel } from "./components/SearchPanel";
 import { ChatPanel } from "./components/ChatPanel";
+import { EvalPanel } from "./components/EvalPanel";
 
-type Tab = "chat" | "search";
+type Tab = "chat" | "search" | "eval";
 
 export default function App() {
   const status = useVaultStore((s) => s.status);
@@ -18,7 +20,11 @@ export default function App() {
   const restoreIndex = useVaultStore((s) => s.restoreIndex);
   const selectedNotePath = useVaultStore((s) => s.selectedNotePath);
   const selectNote = useVaultStore((s) => s.selectNote);
+  const previewSource = useVaultStore((s) => s.previewSource);
+  const previewChunk = useVaultStore((s) => s.previewChunk);
   const loadSettings = useChatStore((s) => s.loadSettings);
+
+  const showPreview = Boolean(previewSource || selectedNotePath);
 
   const [tab, setTab] = useState<Tab>("chat");
 
@@ -58,7 +64,7 @@ export default function App() {
         {/* Center: chat / search tabs */}
         <section className="flex min-w-0 flex-1 flex-col">
           <div className="flex gap-1 border-b border-neutral-200 px-4 pt-3 dark:border-neutral-800">
-            {(["chat", "search"] as Tab[]).map((t) => (
+            {(["chat", "search", "eval"] as Tab[]).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -74,12 +80,12 @@ export default function App() {
             ))}
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-6">
-            {tab === "chat" ? <ChatPanel /> : <SearchPanel />}
+            {tab === "chat" ? <ChatPanel /> : tab === "search" ? <SearchPanel /> : <EvalPanel />}
           </div>
         </section>
 
-        {/* Right: source preview, shown when a note/citation is selected */}
-        {selectedNotePath && (
+        {/* Right: source preview — a cited chunk (note or book) or a full note */}
+        {showPreview && (
           <aside className="flex w-96 shrink-0 flex-col border-l border-neutral-200 dark:border-neutral-800">
             <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">
               <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
@@ -87,7 +93,10 @@ export default function App() {
               </span>
               <button
                 type="button"
-                onClick={() => selectNote(undefined)}
+                onClick={() => {
+                  selectNote(undefined);
+                  previewChunk(undefined);
+                }}
                 className="text-sm text-neutral-400 hover:text-neutral-700"
                 title="Close"
               >
@@ -95,7 +104,7 @@ export default function App() {
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-auto p-4">
-              <NotePreview />
+              {previewSource ? <SourcePreview source={previewSource} /> : <NotePreview />}
             </div>
           </aside>
         )}

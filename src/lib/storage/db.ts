@@ -12,11 +12,15 @@ export interface StoredChunk {
   id: string;
   notePath: string;
   chunkIndex: number;
+  /** "note" | "pdf". */
+  sourceType: "note" | "pdf";
+  /** 1-based page number for PDF chunks. */
+  page?: number;
   text: string;
   headingPath: string[];
   tokenCount: number;
   embedding: Float32Array;
-  /** Source note's lastModified, denormalized onto the chunk for convenience. */
+  /** Source document's lastModified, denormalized onto the chunk for convenience. */
   lastModified: number;
 }
 
