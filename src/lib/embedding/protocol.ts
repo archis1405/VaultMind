@@ -9,6 +9,9 @@
 
 export type EmbedderBackend = "webgpu" | "wasm";
 
+/** The embedding model. Persisted with the index so a model swap forces a rebuild. */
+export const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
+
 /** Progress emitted while the model weights download + initialize. */
 export interface ModelLoadProgress {
   /** transformers.js status: "initiate" | "download" | "progress" | "done" | "ready". */

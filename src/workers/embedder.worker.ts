@@ -2,17 +2,18 @@
 /// <reference types="@webgpu/types" />
 
 import { pipeline, env, type FeatureExtractionPipeline } from "@huggingface/transformers";
-import type {
-  EmbedderBackend,
-  EmbedderRequest,
-  EmbedderResponse,
+import {
+  EMBEDDING_MODEL,
+  type EmbedderBackend,
+  type EmbedderRequest,
+  type EmbedderResponse,
 } from "../lib/embedding/protocol";
 
 // Always fetch weights from the HF hub + browser cache; there are no local model
 // files bundled with the app. (Step 10 layers a service worker over this cache.)
 env.allowLocalModels = false;
 
-const MODEL_ID = "Xenova/all-MiniLM-L6-v2";
+const MODEL_ID = EMBEDDING_MODEL;
 
 /**
  * `pipeline()` has a giant overload union (one per task) that overflows the TS
