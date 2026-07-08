@@ -66,20 +66,29 @@ export function SettingsPanel() {
 
           <div>
             <label className="mb-1 block text-xs text-neutral-500">Model</label>
-            <input
-              list="openrouter-models"
+            <select
               value={model}
               onChange={(e) => void setModel(e.target.value)}
-              placeholder="anthropic/claude-…"
               className="w-full rounded border border-neutral-300 bg-white px-2 py-1 text-sm outline-none focus:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-950"
-            />
-            <datalist id="openrouter-models">
+            >
+              {models.length === 0 && <option value="">Loading models…</option>}
+              {/* A custom / persisted model not in the catalog still shows selected. */}
+              {model && !models.some((m) => m.id === model) && (
+                <option value={model}>{model} (custom)</option>
+              )}
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>
               ))}
-            </datalist>
+            </select>
+            <input
+              value={model}
+              onChange={(e) => void setModel(e.target.value)}
+              placeholder="…or paste a model id (anthropic/claude-…)"
+              autoComplete="off"
+              className="mt-1 w-full rounded border border-neutral-200 bg-white px-2 py-1 text-xs outline-none focus:border-neutral-500 dark:border-neutral-800 dark:bg-neutral-950"
+            />
           </div>
         </div>
       )}
