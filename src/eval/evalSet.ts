@@ -18,7 +18,7 @@ export const EVAL_SET: EvalCase[] = [
   // --- replace the examples below with your own labeled pairs ---
   {
     query: "How did I decide to structure the retrieval pipeline?",
-    expected: [{ path: "AskVault/architecture.md" }],
+    expected: [{ path: "Memora/architecture.md" }],
   },
   {
     query: "What does reciprocal rank fusion actually combine?",

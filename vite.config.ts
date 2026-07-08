@@ -16,8 +16,8 @@ export default defineConfig({
       devOptions: { enabled: false },
       includeAssets: ["icon.svg", "mask-icon.svg"],
       manifest: {
-        name: "AskVault",
-        short_name: "AskVault",
+        name: "Memora",
+        short_name: "Memora",
         description: "Client-side semantic search & Q&A over your Obsidian vault. Zero backend.",
         theme_color: "#0a0a0a",
         background_color: "#0a0a0a",

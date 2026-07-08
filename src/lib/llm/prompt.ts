@@ -71,7 +71,7 @@ export function buildContext(results: HybridResult[]): {
   return { sources, contextBlock };
 }
 
-const SYSTEM_PROMPT = `You are AskVault, a careful assistant answering questions about the user's personal notes.
+const SYSTEM_PROMPT = `You are Memora, a careful assistant answering questions about the user's personal notes.
 
 Rules:
 - Answer using ONLY the information in the provided context sources.

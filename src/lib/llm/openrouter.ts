@@ -78,8 +78,8 @@ export async function* streamChatCompletion(
       Authorization: `Bearer ${opts.apiKey}`,
       "Content-Type": "application/json",
       // Optional attribution headers OpenRouter surfaces in dashboards.
-      "HTTP-Referer": typeof location !== "undefined" ? location.origin : "https://askvault.app",
-      "X-Title": "AskVault",
+      "HTTP-Referer": typeof location !== "undefined" ? location.origin : "https://memora.app",
+      "X-Title": "Memora",
     },
     body: JSON.stringify({ model: opts.model, messages: opts.messages, stream: true }),
   });

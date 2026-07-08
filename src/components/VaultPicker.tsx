@@ -18,7 +18,7 @@ export function VaultPicker() {
   if (!supported) {
     return (
       <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-        Your browser doesn't support the File System Access API. Open AskVault in
+        Your browser doesn't support the File System Access API. Open Memora in
         a Chromium-based browser (Chrome, Edge, Arc, Brave) to load a vault.
       </div>
     );

@@ -38,7 +38,7 @@ export default function App() {
     <div className="flex h-full flex-col bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
       <header className="flex items-center justify-between border-b border-neutral-200 px-6 py-4 dark:border-neutral-800">
         <div className="flex items-center gap-2">
-          <span className="text-xl font-semibold tracking-tight">AskVault</span>
+          <span className="text-xl font-semibold tracking-tight">Memora</span>
           <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
             client-side · zero backend
           </span>

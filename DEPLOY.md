@@ -1,6 +1,6 @@
-# Deploying AskVault
+# Deploying Memora
 
-AskVault is a fully static, zero-backend SPA. Any static host works; configs for
+Memora is a fully static, zero-backend SPA. Any static host works; configs for
 two are included.
 
 `npm run build` → everything ships from `dist/` (app shell, workers, WASM, the
