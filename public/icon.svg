@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="AskVault">
+  <rect width="512" height="512" rx="112" fill="#0a0a0a"/>
+  <!-- open book -->
+  <g fill="none" stroke="#fafafa" stroke-width="26" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M256 152 C 216 128, 160 124, 120 136 L 120 372 C 160 360, 216 364, 256 388"/>
+    <path d="M256 152 C 296 128, 352 124, 392 136 L 392 372 C 352 360, 296 364, 256 388"/>
+    <path d="M256 152 L 256 388"/>
+  </g>
+  <!-- search spark -->
+  <circle cx="332" cy="300" r="42" fill="none" stroke="#fafafa" stroke-width="26"/>
+  <line x1="362" y1="330" x2="404" y2="372" stroke="#fafafa" stroke-width="30" stroke-linecap="round"/>
+</svg>

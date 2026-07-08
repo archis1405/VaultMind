@@ -1,0 +1,3 @@
+# Cloudflare Pages SPA fallback. Existing static files (assets, sw.js, manifest)
+# are served first; everything else falls through to the app shell.
+/*    /index.html    200
