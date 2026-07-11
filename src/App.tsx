@@ -10,8 +10,9 @@ import { SourcePreview } from "./components/SourcePreview";
 import { SearchPanel } from "./components/SearchPanel";
 import { ChatPanel } from "./components/ChatPanel";
 import { EvalPanel } from "./components/EvalPanel";
+import { GraphPanel } from "./components/GraphPanel";
 
-type Tab = "chat" | "search" | "eval";
+type Tab = "chat" | "search" | "graph" | "eval";
 
 export default function App() {
   const status = useVaultStore((s) => s.status);
@@ -61,7 +62,7 @@ export default function App() {
         {/* Center: chat / search tabs */}
         <section className="flex min-w-0 flex-1 flex-col">
           <div className="flex gap-1 border-b border-neutral-200 px-4 pt-3 dark:border-neutral-800">
-            {(["chat", "search", "eval"] as Tab[]).map((t) => (
+            {(["chat", "search", "graph", "eval"] as Tab[]).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -77,7 +78,15 @@ export default function App() {
             ))}
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-6">
-            {tab === "chat" ? <ChatPanel /> : tab === "search" ? <SearchPanel /> : <EvalPanel />}
+            {tab === "chat" ? (
+              <ChatPanel />
+            ) : tab === "search" ? (
+              <SearchPanel />
+            ) : tab === "graph" ? (
+              <GraphPanel />
+            ) : (
+              <EvalPanel />
+            )}
           </div>
         </section>
 
