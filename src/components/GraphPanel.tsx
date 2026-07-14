@@ -3,10 +3,10 @@ import { useVaultStore } from "../store/vaultStore";
 import { buildGraph, type Graph } from "../lib/graph/buildGraph";
 import { createLayout, stepLayout, type Layout } from "../lib/graph/forceLayout";
 
-/** Distinct, theme-agnostic cluster hues (cycled for large graphs). */
+/** Muted, desaturated cluster tones — distinguishable without shouting. */
 const CLUSTER_COLORS = [
-  "#6366f1", "#ec4899", "#14b8a6", "#f59e0b", "#8b5cf6",
-  "#ef4444", "#22c55e", "#3b82f6", "#eab308", "#06b6d4",
+  "#6b7a8f", "#7a9080", "#a08a7a", "#8a7f9c", "#9c8f6b",
+  "#6f9296", "#9c7f88", "#7f886b", "#88808f", "#a0897f",
 ];
 const nodeColor = (cluster: number) => CLUSTER_COLORS[cluster % CLUSTER_COLORS.length];
 
@@ -382,7 +382,7 @@ export function GraphPanel() {
             step={0.01}
             value={minSimilarity}
             onChange={(e) => setMinSimilarity(Number(e.target.value))}
-            className="w-32 accent-indigo-500"
+            className="w-32 accent-neutral-500"
           />
         </label>
         <button
@@ -417,11 +417,13 @@ export function GraphPanel() {
         />
         {hoveredNode && (
           <div className="pointer-events-none absolute left-3 top-3 max-w-xs rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-xs shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-950/90">
-            <div className="flex items-center gap-1.5 font-medium">
-              <span>{hoveredNode.sourceType === "pdf" ? "📖" : "📄"}</span>
-              <span className="truncate">{hoveredNode.name}</span>
+            <div className="flex items-center gap-2">
+              <span className="rounded border border-neutral-300 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-neutral-500 dark:border-neutral-600">
+                {hoveredNode.sourceType}
+              </span>
+              <span className="truncate font-medium">{hoveredNode.name}</span>
             </div>
-            <div className="mt-0.5 text-neutral-500">
+            <div className="mt-1 text-neutral-500">
               {hoveredNode.chunkCount} chunk{hoveredNode.chunkCount === 1 ? "" : "s"} ·{" "}
               {hoveredNode.degree} link{hoveredNode.degree === 1 ? "" : "s"}
             </div>

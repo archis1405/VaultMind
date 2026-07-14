@@ -11,8 +11,11 @@ import { SearchPanel } from "./components/SearchPanel";
 import { ChatPanel } from "./components/ChatPanel";
 import { EvalPanel } from "./components/EvalPanel";
 import { GraphPanel } from "./components/GraphPanel";
+import { GettingStarted } from "./components/GettingStarted";
 
 type Tab = "chat" | "search" | "graph" | "eval";
+
+const GUIDE_SEEN_KEY = "memora.guideSeen";
 
 export default function App() {
   const status = useVaultStore((s) => s.status);
@@ -28,6 +31,19 @@ export default function App() {
   const showPreview = Boolean(previewSource || selectedNotePath);
 
   const [tab, setTab] = useState<Tab>("chat");
+  // Show the getting-started guide until the user has dismissed it once.
+  const [showGuide, setShowGuide] = useState(
+    () => typeof localStorage === "undefined" || localStorage.getItem(GUIDE_SEEN_KEY) !== "1",
+  );
+
+  const dismissGuide = () => {
+    try {
+      localStorage.setItem(GUIDE_SEEN_KEY, "1");
+    } catch {
+      // Private-mode storage failure is harmless; the guide just reopens next load.
+    }
+    setShowGuide(false);
+  };
 
   // Restore persisted index + chat settings/history on startup.
   useEffect(() => {
@@ -41,9 +57,20 @@ export default function App() {
         <div className="flex items-center gap-2">
           <span className="text-xl font-semibold tracking-tight">Memora</span>
         </div>
-        <span className="text-xs text-neutral-500">
-          {vaultName ? `${vaultName} · ${noteCount} notes` : `status: ${status}`}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-neutral-500">
+            {vaultName ? `${vaultName} · ${noteCount} notes` : `status: ${status}`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowGuide(true)}
+            className="flex h-6 w-6 items-center justify-center rounded-full border border-neutral-300 text-xs font-semibold text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 dark:border-neutral-700 dark:hover:bg-neutral-900 dark:hover:text-neutral-200"
+            title="How to use Memora"
+            aria-label="How to use Memora"
+          >
+            ?
+          </button>
+        </div>
       </header>
 
       <main className="flex min-h-0 flex-1">
@@ -78,7 +105,9 @@ export default function App() {
             ))}
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-6">
-            {tab === "chat" ? (
+            {showGuide ? (
+              <GettingStarted onClose={dismissGuide} />
+            ) : tab === "chat" ? (
               <ChatPanel />
             ) : tab === "search" ? (
               <SearchPanel />
